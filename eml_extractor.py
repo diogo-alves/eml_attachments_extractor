@@ -1,3 +1,4 @@
+import mimetypes
 import re
 from argparse import ArgumentParser, ArgumentTypeError
 from email import message_from_file, policy
@@ -16,20 +17,20 @@ def extract_attachments(file: Path, destination: Path) -> None:
             if not attachments:
                 print('>> No attachments found.')
                 return
-                
+
             # Create base directory before processing attachments
             basepath.mkdir(parents=True, exist_ok=True)
-                
+
             for attachment in attachments:
                 filename = get_safe_filename(attachment)
                 if not filename:
                     print('>> Attachment found: None')
                     continue
-                    
+
                 print(f'>> Attachment found: {filename}')
                 filepath = basepath / filename
                 payload = attachment.get_payload(decode=True)
-                
+
                 if filepath.exists():
                     overwrite = input(f'>> The file "{filename}" already exists! Overwrite it (Y/n)? ')
                     save_attachment(filepath, payload) if overwrite.upper() == 'Y' else print('>> Skipping...')
@@ -41,25 +42,25 @@ def extract_attachments(file: Path, destination: Path) -> None:
             email_message = message_from_file(f, policy=policy.default)
             email_subject = email_message.get('Subject', 'No Subject')
             basepath = destination / sanitize_foldername(email_subject)
-            
+
             attachments = [item for item in email_message.iter_attachments() if item.is_attachment()]
             if not attachments:
                 print('>> No attachments found.')
                 return
-                
+
             # Create base directory before processing attachments
             basepath.mkdir(parents=True, exist_ok=True)
-                
+
             for attachment in attachments:
                 filename = get_safe_filename(attachment)
                 if not filename:
                     print('>> Attachment found: None')
                     continue
-                    
+
                 print(f'>> Attachment found: {filename}')
                 filepath = basepath / filename
                 payload = attachment.get_payload(decode=True)
-                
+
                 if filepath.exists():
                     overwrite = input(f'>> The file "{filename}" already exists! Overwrite it (Y/n)? ')
                     save_attachment(filepath, payload) if overwrite.upper() == 'Y' else print('>> Skipping...')
@@ -83,7 +84,7 @@ def save_attachment(file: Path, payload: bytes) -> None:
     try:
         # Ensure parent directory exists
         file.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with file.open('wb') as f:
             print(f'>> Saving attachment to "{file}"')
             f.write(payload)
@@ -95,20 +96,20 @@ def get_safe_filename(attachment) -> str:
         filename = attachment.get_filename()
         if not filename:
             return None
-            
+
         # Handle RFC 2231 encoded filenames
         filename = filename.replace('"', '').replace('\t', '')
         filename = re.sub(r';\s*filename\*\d*=', '', filename)
-        
+
         # Basic sanitization
         filename = sanitize_foldername(filename)
-        
+
         # Ensure filename has an extension
         if not Path(filename).suffix and attachment.get_content_type():
             ext = mimetypes.guess_extension(attachment.get_content_type())
             if ext:
                 filename = f"{filename}{ext}"
-                
+
         return filename
     except Exception as e:
         print(f"Error processing filename: {e}")
