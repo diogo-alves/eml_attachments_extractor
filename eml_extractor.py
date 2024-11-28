@@ -5,6 +5,23 @@ from email import message_from_file, policy
 from pathlib import Path
 from typing import List
 
+
+def generate_unique_filename(filepath: Path) -> Path:
+    # Generate a unique filename by adding an incrementing number
+    if not filepath.exists():
+        return filepath
+
+    base = filepath.stem
+    suffix = filepath.suffix
+    counter = 1
+
+    while True:
+        new_filepath = filepath.with_name(f"{base}_{counter}{suffix}")
+        if not new_filepath.exists():
+            return new_filepath
+        counter += 1
+
+
 def extract_attachments(file: Path, destination: Path) -> None:
     print(f'PROCESSING FILE "{file}"')
     try:
@@ -12,6 +29,7 @@ def extract_attachments(file: Path, destination: Path) -> None:
             email_message = message_from_file(f, policy=policy.default)
             email_subject = email_message.get('Subject', 'No Subject')
             basepath = destination / sanitize_foldername(email_subject)
+            duplicates_path = destination / "duplicates"
             # ignore inline attachments
             attachments = [item for item in email_message.iter_attachments() if item.is_attachment()]  # type: ignore
             if not attachments:
@@ -32,8 +50,10 @@ def extract_attachments(file: Path, destination: Path) -> None:
                 payload = attachment.get_payload(decode=True)
 
                 if filepath.exists():
-                    overwrite = input(f'>> The file "{filename}" already exists! Overwrite it (Y/n)? ')
-                    save_attachment(filepath, payload) if overwrite.upper() == 'Y' else print('>> Skipping...')
+                    print('>> Moving to duplicates folder...')
+                    duplicates_path.mkdir(exist_ok=True)
+                    duplicate_filepath = generate_unique_filename(duplicates_path / filename)
+                    save_attachment(duplicate_filepath, payload)
                 else:
                     save_attachment(filepath, payload)
     except UnicodeDecodeError:
@@ -42,6 +62,7 @@ def extract_attachments(file: Path, destination: Path) -> None:
             email_message = message_from_file(f, policy=policy.default)
             email_subject = email_message.get('Subject', 'No Subject')
             basepath = destination / sanitize_foldername(email_subject)
+            duplicates_path = destination / "duplicates"
 
             attachments = [item for item in email_message.iter_attachments() if item.is_attachment()]
             if not attachments:
@@ -62,10 +83,13 @@ def extract_attachments(file: Path, destination: Path) -> None:
                 payload = attachment.get_payload(decode=True)
 
                 if filepath.exists():
-                    overwrite = input(f'>> The file "{filename}" already exists! Overwrite it (Y/n)? ')
-                    save_attachment(filepath, payload) if overwrite.upper() == 'Y' else print('>> Skipping...')
+                    print('>> Moving to duplicates folder...')
+                    duplicates_path.mkdir(exist_ok=True)
+                    duplicate_filepath = generate_unique_filename(duplicates_path / filename)
+                    save_attachment(duplicate_filepath, payload)
                 else:
                     save_attachment(filepath, payload)
+
 
 def sanitize_foldername(name: str) -> str:
     if not name:
@@ -80,16 +104,17 @@ def sanitize_foldername(name: str) -> str:
     # Limit the length to avoid path length issues
     return sanitized[:100]
 
+
 def save_attachment(file: Path, payload: bytes) -> None:
     try:
         # Ensure parent directory exists
         file.parent.mkdir(parents=True, exist_ok=True)
-
         with file.open('wb') as f:
             print(f'>> Saving attachment to "{file}"')
             f.write(payload)
     except Exception as e:
         print(f'>> Error saving attachment: {e}')
+
 
 def get_safe_filename(attachment) -> str:
     try:
@@ -115,10 +140,12 @@ def get_safe_filename(attachment) -> str:
         print(f"Error processing filename: {e}")
         return None
 
+
 def get_eml_files_from(path: Path, recursively: bool = False) -> List[Path]:
     if recursively:
         return list(path.rglob('*.eml'))
     return list(path.glob('*.eml'))
+
 
 def check_file(arg_value: str) -> Path:
     file = Path(arg_value)
@@ -126,11 +153,13 @@ def check_file(arg_value: str) -> Path:
         return file
     raise ArgumentTypeError(f'"{file}" is not a valid EML file.')
 
+
 def check_path(arg_value: str) -> Path:
     path = Path(arg_value)
     if path.is_dir():
         return path
     raise ArgumentTypeError(f'"{path}" is not a valid directory.')
+
 
 def main():
     parser = ArgumentParser(
